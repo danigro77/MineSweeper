@@ -12,18 +12,24 @@ class Board
   end
 
   def get_field_in_grid(coordinates)
+    coordinates = coordinates.split('-').map {|c| c.to_i} if coordinates.is_a?(String)
     row, column = coordinates
     field = get_row(row).select {|f| f.column == column}
     field.empty? ? nil : field.first
   end
 
+  def covered_fields
+    @fields.select {|f| f.covered}
+  end
+
+
   def num_of_covered_fields
-    @fields.select {|f| f.covered}.length
+    covered_fields.length
   end
 
   def uncover_surrounding_fields(field)
     fields_to_uncover = fields_to_uncover(field, Set.new().add(field))
-    fields_to_uncover.to_a.each { |f| f.covered = false }
+    fields_to_uncover.to_a.each { |f| f.covered = false }.map { |f| "#{f.row}-#{f.column}" }
   end
 
   def fields_to_uncover(field, collection)
@@ -40,6 +46,21 @@ class Board
 
     unchecked_empty.each { |f| collection += fields_to_uncover(f, collection) unless f.is_uncovered? }
     collection
+  end
+
+  def position_of_covered
+    result = {in_the_middle: [], on_the_edge: {}}
+    covered_fields.each do |field|
+      surrounding = collect_surrounding_fields(field)
+      result[:in_the_middle] << field if surrounding[:uncovered][:fields].length == 0
+      if surrounding[:uncovered][:fields].length > 0
+        num_uncovered = surrounding[:uncovered][:fields].length.to_s
+        sum_nums = surrounding[:uncovered][:sum_nums]
+        result[:on_the_edge][num_uncovered] ||= []
+        result[:on_the_edge][num_uncovered] << {field: field, sum: sum_nums}
+      end
+    end
+    result
   end
 
   def rows_to_s
@@ -100,12 +121,18 @@ class Board
   end
 
   def collect_surrounding_fields(field)
-    result = {bomb: [], empty: [], number: []}
+    result = {
+        bomb: [], empty: [], number: [],
+        covered: {sum_nums: 0, fields: []}, uncovered: {sum_nums: 0, fields: []}
+    }
     @directions.each do |row, column|
       f = get_field_in_grid([field.row+row, field.column+column])
       next if f.nil?
       result[f.content.to_sym] << f if f.has_content?
       result[:empty] << f unless f.has_content?
+      key = f.covered ? :covered : :uncovered
+      result[key][:fields] << f
+      result[key][:sum_nums] += f.touching_bombs
     end
     result
   end
