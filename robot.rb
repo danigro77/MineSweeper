@@ -8,34 +8,39 @@ class Robot
       num_of_turns: 100000
   }
 
-  def initialize(options={})
-    options = DEFAULT.merge(options)
-    @grid_size = options[:grid_size]
-    @num_bombs = options[:num_bombs]
-    @num_of_turns = options[:num_of_turns]
+  def initialize()
+    @grid_size = DEFAULT[:grid_size]
+    @num_bombs = DEFAULT[:num_bombs]
+    @num_of_turns = DEFAULT[:num_of_turns]
     @possible_moves = calculate_moves
   end
 
   def choose_field(board)
+    # Strategy for the Robot's picks:
+    # First uncover all fields with no uncovered neighbours
+    # Then uncover the ones with the smallest sum of surrounding numbers
     covered_fields = board.position_of_covered
     field = if covered_fields[:in_the_middle].length > 0
               covered_fields[:in_the_middle].sample
             else
               fields = covered_fields[:on_the_edge]
               keys = fields.keys.map(&:to_i).sort
-
-              fields[keys.first.to_s].sort_by { |f| f[:sum]}.first[:field]
+              fields[keys.last.to_s].sort_by { |f| f[:sum]}.first[:field]
             end
-    formatted = "#{field.row}-#{field.column}"
-    @possible_moves -= [formatted]
-    formatted
+    next_field = [field.row, field.column]
+    @possible_moves -= [next_field]
+    next_field
+  end
+
+  def reset_moves
+    @possible_moves = calculate_moves
   end
 
   private
 
   def calculate_moves
     moves = []
-    @grid_size.times { |i| @grid_size.times { |j| moves << "#{i}-#{j}" } }
+    @grid_size.times { |i| @grid_size.times { |j| moves << [i,j] } }
     moves
   end
 end

@@ -7,98 +7,7 @@
 require './board.rb'
 require './field.rb'
 require './robot.rb'
-
-# -----------------------------
-#       Helper methods
-# -----------------------------
-def user_messages
-  {
-      set_player: "Do you want to play, or should a robot? [y,n]",
-      welcome: "Welcome to MINE SWEEPER!",
-      robot_game: "MINE SWEEPER SOLVER",
-      grid_size: "How big should be your square grid? ",
-      grid_warn1: "This needs to be an Integer.",
-      grid_warn2: "Please pick a bigger grid.",
-      grid_warn3: "Please pick a smaller grid.",
-      num_bombs: "How many bombs do you like to defuse? ",
-      bomb_warn1: "This needs to be an Integer.",
-      bomb_warn2: "Please pick more bombs.",
-      bomb_warn3: "Too many bombs for the grid.",
-      uncover: "Uncover a field (row-column, like 0-1): ",
-      uncover_warn1: "Please make sure your input is correct and the values are seperated with a dash.",
-      uncover_warn2: "You gave too many values.",
-      uncover_warn3: "This was already used.",
-      uncover_warn4: "Only integers are allowed that are on the grid.",
-      won_game: "Congratulations, you won!",
-      lost_game: "Sorry, you lost!",
-      new_game: "Do you want to play a new game? [y/n] ",
-      yes_no_warn: "Only 'y' and 'n' are allowed as input",
-      statistics: "Won games: %s \nLost games: %s",
-      bye: "BYE! See you soon!",
-      double_line: "============================",
-      single_line: "----------------------------"
-  }
-end
-
-def valid_indexes?(input_indexes)
-  valid = true
-  input_indexes.each do |index|
-    valid = false if no_integer?(index) || index.to_i > @grid_size
-  end
-  valid
-end
-
-def no_integer?(input)
-  input.to_i.to_s != input
-end
-
-def draw_board
-  if human_player?
-    msg_2spaces(:single_line)
-    puts @board.rows_to_s
-  else
-    puts '.'
-  end
-end
-
-def msg_2spaces(type)
-  puts
-  puts user_messages[type]
-  puts
-end
-
-def msg_1space(type)
-  puts user_messages[type]
-  puts
-end
-
-def start_message(type)
-  puts
-  puts user_messages[:double_line]
-  puts user_messages[type]
-  puts user_messages[:double_line]
-  puts
-end
-
-def show_statisics
-  puts
-  puts user_messages[:double_line]
-  puts user_messages[:statistics] % [@wins, @losts]
-  puts user_messages[:double_line]
-  puts
-end
-
-def yes_no_input
-  user_input = gets.chomp
-  if user_input.downcase == 'y'
-    true
-  elsif user_input.downcase == 'n'
-    false
-  else
-    msg_1space(:yes_no_warn)
-    yield
-  end
-end
+require './helper.rb'
 
 # -----------------------------
 #       Game methods
@@ -107,14 +16,16 @@ end
 def play_game
   set_variables
 
+  puts "Turns left: #{@robot.num_of_turns}" unless human_player?
+
 # Play the game
   until @game_end
-    draw_board
+    draw_board(@board)
     uncover_field
     @game_end = @lost || game_won?
   end
 
-  msg_2spaces(:double_line)
+  # msg_2spaces(:double_line)
 
   if @lost
     puts user_messages[:lost_game]
@@ -124,18 +35,16 @@ def play_game
     @wins += 1
   end
 
-  draw_board
+  draw_board(@board)
 
-  if new_game?
-    play_game
-  else
-    show_statisics
-    msg_1space(:bye)
-  end
+  play_again?
 end
 
 def uncover_field
-  field = @board.get_field_in_grid(human_player? ? uncover_dialog : robot_field_pick)
+  coordiantes =  human_player? ? uncover_dialog : robot_field_pick
+  row, column = coordiantes[0], coordiantes[1]
+
+  field = @board.get_field_in_grid(row, column)
   if field
     field.uncover
     @lost = field.has_bomb?
@@ -148,10 +57,11 @@ end
 
 def robot_field_pick
   if @robot.possible_moves.length == @grid_size
-    @robot.possible_moves.shuffle.pop
+    f = @robot.possible_moves.shuffle.pop
   else
-    @robot.choose_field(@board)
+    f = @robot.choose_field(@board)
   end
+  f
 end
 
 def uncover_dialog
@@ -164,11 +74,11 @@ def uncover_dialog
     elsif input_indexes.length > 2
       msg_1space(:uncover_warn2)
     else
-      if @uncovered_fields.include? input_indexes
+      if @uncovered_fields.include? input_indexes.map {|i| i.to_i }
         msg_1space(:uncover_warn3)
-      elsif valid_indexes?(input_indexes)
+      elsif valid_indexes?(input_indexes, @grid_size)
         next_field = input_indexes.map {|i| i.to_i }
-        @uncovered_fields << input_indexes
+        @uncovered_fields << next_field
       else
         msg_1space(:uncover_warn4)
       end
@@ -223,13 +133,18 @@ def set_variables
   @lost = false
 end
 
-def new_game?
+def play_again?
   if human_player?
     puts user_messages[:new_game]
-    yes_no_input { new_game? }
+    @play_again = yes_no_input { new_game? }
   else
     @robot.num_of_turns -= 1
-    @robot.num_of_turns > 0
+    @play_again = @robot.num_of_turns > 0
+    @robot.reset_moves if @play_again
+  end
+  unless @play_again
+    show_statisics
+    msg_1space(:bye)
   end
 end
 
@@ -246,7 +161,7 @@ end
 # -----------------------------
 
 #   Initializing variables
-def game
+def new_game
   set_player
 
   if human_player?
@@ -262,12 +177,11 @@ def game
     @grid_size = @robot.grid_size
     @num_bombs = @robot.num_bombs
   end
-
-#   Initialize the game
-  play_game
+  @play_again = true
 end
 
 @wins = 0
 @losts = 0
 
-game
+new_game
+play_game while @play_again
